@@ -1,0 +1,2 @@
+# CivitAI Model Manager - ComfyUI Companion Node Dependencies
+requests>=2.28.0
