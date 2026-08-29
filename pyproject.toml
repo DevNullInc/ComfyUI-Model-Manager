@@ -1,0 +1,16 @@
+[project]
+name = "comfyui-model-manager"
+description = "Native ComfyUI companion node for CivitAI Model Manager. Provides in-canvas model discovery, smart pipe model loading, 1-click missing node dependency resolution, and real-time HTTP bridge integration."
+version = "1.0.0"
+license = { file = "LICENSE" }
+requires-python = ">=3.9"
+dependencies = ["requests>=2.28.0"]
+
+[project.urls]
+Repository = "https://github.com/DevNullInc/ComfyUI-Model-Manager"
+Homepage = "https://github.com/DevNullInc/ComfyUI-Model-Manager"
+
+[tool.comfy]
+PublisherId = "devnullinc"
+DisplayName = "CivitAI Model Manager Companion"
+Icon = ""
