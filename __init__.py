@@ -22,8 +22,8 @@ try:
         CMMRawRequest,
     )
 except ImportError:
-    from datatypes import MODEL_BUNDLE
-    from nodes import (
+    from datatypes import MODEL_BUNDLE  # type: ignore
+    from nodes import (  # type: ignore
         SmartModelLoader,
         PipeUnpackModel,
         CMMStatus,

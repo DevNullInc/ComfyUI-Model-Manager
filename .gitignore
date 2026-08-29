@@ -46,3 +46,6 @@ htmlcov/
 *.swp
 *.swo
 *~
+tests/test_cmm_client.py
+tests/test_cmm_nodes.py
+pyrightconfig.json

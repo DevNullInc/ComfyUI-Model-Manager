@@ -24,13 +24,13 @@ logger = logging.getLogger("ComfyUI-Model-Manager")
 # Optional ComfyUI runtime imports with safe fallbacks
 # -----------------------------------------------------------------------------
 try:
-    import folder_paths
+    import folder_paths  # type: ignore
 except ImportError:
     folder_paths = None
 
 try:
-    import comfy.sd
-    import comfy.utils
+    import comfy.sd  # type: ignore
+    import comfy.utils  # type: ignore
 except ImportError:
     try:
         import importlib
@@ -44,7 +44,7 @@ except ImportError:
         comfy = None
 
 try:
-    from server import PromptServer
+    from server import PromptServer  # type: ignore
 except ImportError:
     PromptServer = None
 
