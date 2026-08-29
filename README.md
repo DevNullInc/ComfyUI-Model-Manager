@@ -104,6 +104,12 @@ CivitAI Model Manager runs its HTTP API bridge on `127.0.0.1:5174` by default.
 
 ---
 
+## 📋 Requirements
+
+- **ComfyUI**: v0.2.0+ (for Nodes 2.0 compatibility)
+- **CivitAI Model Manager**: v1.3.0+ (for full API support)
+- **Python**: 3.9+
+
 ## 🧪 Testing
 
 Run the automated unit test suite from the repository root:
