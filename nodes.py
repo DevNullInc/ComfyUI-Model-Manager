@@ -90,7 +90,7 @@ class SmartModelLoader:
     Auto-detects architecture from CMM metadata or filename and outputs MODEL_BUNDLE pipe.
     """
 
-    CATEGORY = "CivitAI/Loaders"
+    CATEGORY = "☣Renegade Nodes☣/CivitAI/Loaders"
     FUNCTION = "load_model"
     RETURN_TYPES = ("MODEL_BUNDLE", "MODEL", "CLIP", "VAE", "STRING")
     RETURN_NAMES = ("pipe", "model", "clip", "vae", "model_info")
@@ -303,7 +303,7 @@ class PipeUnpackModel:
     Supports optional CLIP and VAE overrides.
     """
 
-    CATEGORY = "CivitAI/Loaders"
+    CATEGORY = "☣Renegade Nodes☣/CivitAI/Loaders"
     FUNCTION = "unpack"
     RETURN_TYPES = ("MODEL", "CLIP", "VAE", "STRING", "STRING")
     RETURN_NAMES = ("model", "clip", "vae", "model_type", "metadata_json")
@@ -348,7 +348,7 @@ class CMMStatus:
     Verifies connection, API port, and database uptime with CivitAI Model Manager.
     """
 
-    CATEGORY = "CivitAI/Manager"
+    CATEGORY = "☣Renegade Nodes☣/CivitAI/Manager"
     FUNCTION = "check_status"
     RETURN_TYPES = ("BOOLEAN", "STRING", "STRING", "STRING")
     RETURN_NAMES = ("is_online", "status_text", "version", "details_json")
@@ -391,7 +391,7 @@ class CMMInspectWorkflow:
     Scans in-memory workflow graph or prompt dictionary for referenced/missing models and custom nodes.
     """
 
-    CATEGORY = "CivitAI/Manager"
+    CATEGORY = "☣Renegade Nodes☣/CivitAI/Manager"
     FUNCTION = "inspect_workflow"
     RETURN_TYPES = ("INT", "INT", "STRING", "STRING", "STRING")
     RETURN_NAMES = ("model_count", "node_type_count", "missing_models_list", "missing_nodes_list", "details_json")
@@ -463,7 +463,7 @@ class CMMWorkflowResolver:
     Inspects current workflow via CMM and auto-resolves missing nodes and models.
     """
 
-    CATEGORY = "CivitAI/Manager"
+    CATEGORY = "☣Renegade Nodes☣/CivitAI/Manager"
     FUNCTION = "resolve"
     RETURN_TYPES = ("STRING", "STRING", "BOOLEAN")
     RETURN_NAMES = ("status_json", "resolution_report", "all_resolved")
@@ -564,7 +564,7 @@ class CMMResolveNode:
     4-tier query to find install repos for missing node types with optional auto-clone & dep installation.
     """
 
-    CATEGORY = "CivitAI/Manager"
+    CATEGORY = "☣Renegade Nodes☣/CivitAI/Manager"
     FUNCTION = "resolve_node"
     RETURN_TYPES = ("BOOLEAN", "STRING", "STRING", "STRING", "STRING")
     RETURN_NAMES = ("is_installed", "git_url", "author", "title", "details_json")
@@ -624,7 +624,7 @@ class CMMDownloadModel:
     Enqueues model download into auto-sorted folders by CivitAI model/version ID.
     """
 
-    CATEGORY = "CivitAI/Manager"
+    CATEGORY = "☣Renegade Nodes☣/CivitAI/Manager"
     FUNCTION = "download"
     RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING")
     RETURN_NAMES = ("task_id", "status", "computed_path", "details_json")
@@ -690,7 +690,7 @@ class CMMSearchCivitAI:
     Queries CivitAI catalog by query, type, and base model via CMM proxy.
     """
 
-    CATEGORY = "CivitAI/Manager"
+    CATEGORY = "☣Renegade Nodes☣/CivitAI/Manager"
     FUNCTION = "search"
     RETURN_TYPES = ("INT", "STRING", "STRING", "INT")
     RETURN_NAMES = ("result_count", "results_json", "top_model_name", "top_version_id")
@@ -744,7 +744,7 @@ class CMMSearchAndQueue:
     Searches CivitAI and queues top match for download in a single step.
     """
 
-    CATEGORY = "CivitAI/Manager"
+    CATEGORY = "☣Renegade Nodes☣/CivitAI/Manager"
     FUNCTION = "search_and_queue"
     RETURN_TYPES = ("STRING", "BOOLEAN", "STRING")
     RETURN_NAMES = ("download_id", "queued", "details_json")
@@ -823,7 +823,7 @@ class CMMCheckHuggingFace:
     Queries Hugging Face model repository files & metadata via CMM bridge.
     """
 
-    CATEGORY = "CivitAI/Manager"
+    CATEGORY = "☣Renegade Nodes☣/CivitAI/Manager"
     FUNCTION = "check_repo"
     RETURN_TYPES = ("INT", "STRING", "STRING")
     RETURN_NAMES = ("file_count", "files_json", "repo_id")
@@ -854,7 +854,7 @@ class CMMRawRequest:
     Low-level generic HTTP caller for advanced CMM API scripting.
     """
 
-    CATEGORY = "CivitAI/Manager"
+    CATEGORY = "☣Renegade Nodes☣/CivitAI/Manager"
     FUNCTION = "call_api"
     RETURN_TYPES = ("STRING", "STRING", "INT", "BOOLEAN")
     RETURN_NAMES = ("response_text", "json_data", "status_code", "success")
