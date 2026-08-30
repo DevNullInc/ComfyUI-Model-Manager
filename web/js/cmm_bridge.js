@@ -187,13 +187,73 @@ app.registerExtension({
     },
 
     async nodeCreated(node) {
-        // Apply styling for CivitAI / CMM nodes
         const category = node.constructor?.category || "";
         const comfyClass = node.comfyClass || "";
 
-        if (category.startsWith("CivitAI") || comfyClass.startsWith("CMM") || comfyClass.startsWith("SmartModelLoader")) {
+        // Apply styling for Renegade / CivitAI / CMM nodes
+        if (
+            category.includes("Renegade Nodes") ||
+            category.startsWith("CivitAI") ||
+            comfyClass.startsWith("CMM") ||
+            comfyClass === "SmartModelLoader" ||
+            comfyClass === "PipeUnpackModel"
+        ) {
             node.color = "#1e293b";
             node.bgcolor = "#0f172a";
+        }
+
+        // SmartModelLoader: conditionally show clip name / vae name widgets
+        if (comfyClass === "SmartModelLoader") {
+            const toggleWidgetVisibility = (widget, visible) => {
+                if (!widget) return;
+                widget.type = visible ? widget._origType || widget.type : "hidden";
+                if (visible && widget._origType) {
+                    widget.type = widget._origType;
+                }
+                if (!visible) {
+                    if (widget.type !== "hidden") {
+                        widget._origType = widget.type;
+                    }
+                    widget.type = "hidden";
+                }
+            };
+
+            const findWidget = (name) => node.widgets?.find((w) => w.name === name);
+
+            const updateVisibility = () => {
+                const clipSource = findWidget("clip source");
+                const vaeSource = findWidget("vae source");
+                const clipName = findWidget("clip name");
+                const vaeName = findWidget("vae name");
+
+                toggleWidgetVisibility(clipName, clipSource?.value === "Separate File");
+                toggleWidgetVisibility(vaeName, vaeSource?.value === "Separate File");
+
+                // Trigger layout recalculation
+                node.setSize?.(node.computeSize?.() || node.size);
+            };
+
+            // Store original callbacks and chain ours
+            const clipSource = findWidget("clip source");
+            const vaeSource = findWidget("vae source");
+
+            if (clipSource) {
+                const origClip = clipSource.callback;
+                clipSource.callback = (...args) => {
+                    origClip?.(...args);
+                    updateVisibility();
+                };
+            }
+            if (vaeSource) {
+                const origVae = vaeSource.callback;
+                vaeSource.callback = (...args) => {
+                    origVae?.(...args);
+                    updateVisibility();
+                };
+            }
+
+            // Set initial state after a tick so widgets are fully initialized
+            setTimeout(updateVisibility, 100);
         }
     },
 });

@@ -6,9 +6,11 @@ Licensed under GNU General Public License v3.0 (GPL-3.0)
 ComfyUI Custom Nodes for CivitAI Model Manager (CMM)
 """
 
+import gc
 import json
 import logging
 import os
+import time
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 try:
@@ -47,6 +49,16 @@ try:
     from server import PromptServer  # type: ignore
 except ImportError:
     PromptServer = None
+
+try:
+    import torch  # type: ignore
+except ImportError:
+    torch = None
+
+try:
+    import comfy.model_management  # type: ignore
+except ImportError:
+    pass
 
 
 def _send_cmm_event(event_name: str, data: Dict[str, Any]):
@@ -92,8 +104,8 @@ class SmartModelLoader:
 
     CATEGORY = "☣Renegade Nodes☣/CivitAI/Loaders"
     FUNCTION = "load_model"
-    RETURN_TYPES = ("MODEL_BUNDLE", "MODEL", "CLIP", "VAE", "STRING")
-    RETURN_NAMES = ("pipe", "model", "clip", "vae", "model_info")
+    RETURN_TYPES = ("MODEL_BUNDLE",)
+    RETURN_NAMES = ("pipe",)
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -104,19 +116,19 @@ class SmartModelLoader:
         return {
             "required": {
                 "checkpoint": (checkpoints, {"default": checkpoints[0] if checkpoints else "none"}),
-                "loader_mode": (
+                "loader mode": (
                     ["AUTO", "Standard SD", "SDXL", "FLUX", "WAN", "LTX", "MiniMaxH3", "Anima", "Qwen"],
                     {"default": "AUTO"},
                 ),
-                "clip_source": (["Baked In", "Separate Loader", "None"], {"default": "Baked In"}),
-                "vae_source": (["Baked In", "Separate Loader", "None"], {"default": "Baked In"}),
-                "check_cmm": ("BOOLEAN", {"default": True, "tooltip": "Query CMM for model metadata"}),
-                "auto_download": ("BOOLEAN", {"default": False, "tooltip": "Queue download if missing from CMM"}),
+                "clip source": (["Baked In", "Separate File", "None"], {"default": "Baked In"}),
+                "vae source": (["Baked In", "Separate File", "None"], {"default": "Baked In"}),
+                "check cmm": ("BOOLEAN", {"default": True, "tooltip": "Query CMM for model metadata"}),
+                "auto download": ("BOOLEAN", {"default": False, "tooltip": "Queue download if missing from CMM"}),
             },
             "optional": {
-                "clip_name": (clips, {"default": clips[0] if clips else "none"}),
-                "vae_name": (vaes, {"default": vaes[0] if vaes else "none"}),
-                "cmm_port": ("INT", {"default": _get_default_cmm_port(), "min": 1024, "max": 65535, "tooltip": "CMM API port (default: 5174)"}),
+                "clip name": (clips, {"default": clips[0] if clips else "none"}),
+                "vae name": (vaes, {"default": vaes[0] if vaes else "none"}),
+                "cmm port": ("INT", {"default": _get_default_cmm_port(), "min": 1024, "max": 65535, "tooltip": "CMM API port (default: 5174)"}),
             },
             "hidden": {
                 "unique_id": "UNIQUE_ID",
@@ -124,20 +136,16 @@ class SmartModelLoader:
         }
 
     @classmethod
-    def IS_CHANGED(
-        cls,
-        checkpoint: str,
-        loader_mode: str,
-        clip_source: str,
-        vae_source: str,
-        check_cmm: bool = True,
-        auto_download: bool = False,
-        clip_name: Optional[str] = None,
-        vae_name: Optional[str] = None,
-        cmm_port: int = 5174,
-        **kwargs,
-    ) -> str:
-        return f"{checkpoint}:{loader_mode}:{clip_source}:{vae_source}:{clip_name}:{vae_name}:{cmm_port}"
+    def IS_CHANGED(cls, **kwargs) -> str:
+        return "{}:{}:{}:{}:{}:{}:{}".format(
+            kwargs.get("checkpoint", ""),
+            kwargs.get("loader mode", ""),
+            kwargs.get("clip source", ""),
+            kwargs.get("vae source", ""),
+            kwargs.get("clip name", ""),
+            kwargs.get("vae name", ""),
+            kwargs.get("cmm port", ""),
+        )
 
     def detect_model_type(self, checkpoint_name: str, metadata: Dict[str, Any]) -> str:
         """Auto-detect model architecture from filename or CMM metadata."""
@@ -187,19 +195,16 @@ class SmartModelLoader:
 
         return "Standard SD"
 
-    def load_model(
-        self,
-        checkpoint: str,
-        loader_mode: str,
-        clip_source: str,
-        vae_source: str,
-        check_cmm: bool = True,
-        auto_download: bool = False,
-        clip_name: Optional[str] = None,
-        vae_name: Optional[str] = None,
-        cmm_port: int = 5174,
-        unique_id: Optional[str] = None,
-    ) -> Tuple[MODEL_BUNDLE, Any, Any, Any, str]:
+    def load_model(self, **kwargs) -> Tuple[MODEL_BUNDLE]:
+        checkpoint = kwargs.get("checkpoint", "none")
+        loader_mode = kwargs.get("loader mode", "AUTO")
+        clip_source = kwargs.get("clip source", "Baked In")
+        vae_source = kwargs.get("vae source", "Baked In")
+        check_cmm = kwargs.get("check cmm", True)
+        clip_name = kwargs.get("clip name")
+        vae_name = kwargs.get("vae name")
+        cmm_port = kwargs.get("cmm port", _get_default_cmm_port())
+
         # 1. Query CMM for model metadata if enabled
         model_metadata: Dict[str, Any] = {}
         cmm = CMMClient(port=cmm_port)
@@ -226,26 +231,26 @@ class SmartModelLoader:
         if folder_paths and comfy:
             ckpt_path = folder_paths.get_full_path("checkpoints", checkpoint)
             if ckpt_path and os.path.exists(ckpt_path):
-                load_clip_flag = (clip_source == "Baked In")
-                load_vae_flag = (vae_source == "Baked In")
+                load_clip = (clip_source == "Baked In")
+                load_vae = (vae_source == "Baked In")
                 try:
                     embed_dir = folder_paths.get_folder_paths("embeddings") if hasattr(folder_paths, "get_folder_paths") else None
                     out = comfy.sd.load_checkpoint_guess_config(
                         ckpt_path,
-                        output_vae=load_vae_flag,
-                        output_clip=load_clip_flag,
+                        output_vae=load_vae,
+                        output_clip=load_clip,
                         embedding_directory=embed_dir,
                     )
                     model = out[0]
-                    if load_clip_flag and len(out) > 1:
+                    if load_clip and len(out) > 1:
                         clip = out[1]
-                    if load_vae_flag and len(out) > 2:
+                    if load_vae and len(out) > 2:
                         vae_out = out[2]
                 except Exception as e:
                     logger.error(f"Failed to load checkpoint '{checkpoint}': {e}")
 
             # Handle separate CLIP
-            if clip_source == "Separate Loader" and clip_name and clip_name != "none":
+            if clip_source == "Separate File" and clip_name and clip_name != "none":
                 clip_path = folder_paths.get_full_path("clip", clip_name)
                 if clip_path and os.path.exists(clip_path):
                     try:
@@ -256,7 +261,7 @@ class SmartModelLoader:
                 clip = None
 
             # Handle separate VAE
-            if vae_source == "Separate Loader" and vae_name and vae_name != "none":
+            if vae_source == "Separate File" and vae_name and vae_name != "none":
                 vae_path = folder_paths.get_full_path("vae", vae_name)
                 if vae_path and os.path.exists(vae_path):
                     try:
@@ -273,8 +278,8 @@ class SmartModelLoader:
             "detected_mode": detected_mode,
             "clip_source": clip_source,
             "vae_source": vae_source,
-            "clip_name": clip_name if clip_source == "Separate Loader" else None,
-            "vae_name": vae_name if vae_source == "Separate Loader" else None,
+            "clip_name": clip_name if clip_source == "Separate File" else None,
+            "vae_name": vae_name if vae_source == "Separate File" else None,
             "civitai_id": model_metadata.get("civitaiModelId"),
             "version_id": model_metadata.get("civitaiVersionId"),
             "file_path": model_metadata.get("filePath"),
@@ -291,7 +296,7 @@ class SmartModelLoader:
             metadata=metadata,
         )
 
-        return (pipe, model, clip, vae_out, json.dumps(metadata, indent=2))
+        return (pipe,)
 
 
 # =============================================================================
@@ -299,14 +304,14 @@ class SmartModelLoader:
 # =============================================================================
 class PipeUnpackModel:
     """
-    Deconstructs a MODEL_BUNDLE pipe into individual model, clip, vae, architecture type, and metadata.
-    Supports optional CLIP and VAE overrides.
+    Deconstructs a MODEL_BUNDLE pipe into individual model, clip, vae components
+    with optional type, info, and debug outputs.
     """
 
     CATEGORY = "☣Renegade Nodes☣/CivitAI/Loaders"
     FUNCTION = "unpack"
-    RETURN_TYPES = ("MODEL", "CLIP", "VAE", "STRING", "STRING")
-    RETURN_NAMES = ("model", "clip", "vae", "model_type", "metadata_json")
+    RETURN_TYPES = ("MODEL", "CLIP", "VAE", "STRING", "STRING", "STRING")
+    RETURN_NAMES = ("model", "clip", "vae", "type", "info", "debug")
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -314,30 +319,36 @@ class PipeUnpackModel:
             "required": {
                 "pipe": ("MODEL_BUNDLE",),
             },
-            "optional": {
-                "override_clip": ("CLIP", {"tooltip": "Optional replacement CLIP"}),
-                "override_vae": ("VAE", {"tooltip": "Optional replacement VAE"}),
-            },
         }
 
-    def unpack(
-        self,
-        pipe: Any,
-        override_clip: Any = None,
-        override_vae: Any = None,
-    ) -> Tuple[Any, Any, Any, str, str]:
+    def unpack(self, pipe: Any) -> Tuple[Any, Any, Any, str, str, str]:
         if isinstance(pipe, (tuple, list)) and len(pipe) >= 5:
             model, clip, vae, model_type, metadata = pipe[0], pipe[1], pipe[2], pipe[3], pipe[4]
         else:
             model, clip, vae, model_type, metadata = None, None, None, "Unknown", {}
 
-        if override_clip is not None:
-            clip = override_clip
-        if override_vae is not None:
-            vae = override_vae
+        meta = metadata if isinstance(metadata, dict) else {}
 
-        metadata_json = json.dumps(metadata if isinstance(metadata, dict) else {}, indent=2)
-        return (model, clip, vae, str(model_type), metadata_json)
+        # type: architecture identifier
+        type_str = str(model_type)
+
+        # info: human-readable summary
+        info_lines = [
+            f"Checkpoint: {meta.get('checkpoint', 'N/A')}",
+            f"Architecture: {type_str}",
+            f"Base Model: {meta.get('base_model', 'Unknown')}",
+            f"CMM Matched: {'Yes' if meta.get('cmm_matched') else 'No'}",
+        ]
+        if meta.get("civitai_id"):
+            info_lines.append(f"CivitAI ID: {meta['civitai_id']}")
+        if meta.get("version_id"):
+            info_lines.append(f"Version ID: {meta['version_id']}")
+        info_str = "\n".join(info_lines)
+
+        # debug: full metadata JSON dump
+        debug_str = json.dumps(meta, indent=2)
+
+        return (model, clip, vae, type_str, info_str, debug_str)
 
 
 # =============================================================================
@@ -890,3 +901,221 @@ class CMMRawRequest:
         )
         success = 200 <= status_code < 300
         return (resp_text, json.dumps(json_data, indent=2), status_code, success)
+
+
+# =============================================================================
+# 12. VRAM Unloader
+# =============================================================================
+class CMMVRAMUnloader:
+    """
+    Passthrough node that offloads MODEL, CLIP, and/or VAE from VRAM.
+    Three modes: Offload to RAM (CPU), Full Unload, or Aggressive Clear.
+    Designed as an inline assist for low-VRAM workflows.
+    """
+
+    CATEGORY = "\u2623Renegade Nodes\u2623/CivitAI/Memory"
+    FUNCTION = "unload"
+    RETURN_TYPES = ("MODEL", "CLIP", "VAE", "STRING")
+    RETURN_NAMES = ("model", "clip", "vae", "status")
+    OUTPUT_NODE = True
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "mode": (
+                    ["Offload to RAM", "Full Unload", "Aggressive Clear"],
+                    {"default": "Offload to RAM"},
+                ),
+            },
+            "optional": {
+                "model": ("MODEL",),
+                "clip": ("CLIP",),
+                "vae": ("VAE",),
+            },
+        }
+
+    @classmethod
+    def IS_CHANGED(cls, **kwargs) -> str:
+        """Always re-execute — this node is a side-effect operation."""
+        return str(time.time())
+
+    def _offload_to_cpu(self, obj: Any, label: str) -> str:
+        """Move a model patcher or raw module to CPU."""
+        if obj is None:
+            return ""
+        try:
+            # ModelPatcher style (model.model is the nn.Module)
+            inner = getattr(obj, "model", None)
+            if inner is not None and hasattr(inner, "to"):
+                inner.to("cpu")
+                return f"\u2705 {label}: offloaded to RAM\n"
+            # Raw nn.Module
+            if hasattr(obj, "to"):
+                obj.to("cpu")
+                return f"\u2705 {label}: offloaded to RAM\n"
+        except Exception as e:
+            return f"\u26a0\ufe0f {label}: offload failed ({e})\n"
+        return ""
+
+    def _full_unload(self, obj: Any, label: str) -> str:
+        """Evict model from ComfyUI's loaded model cache."""
+        if obj is None:
+            return ""
+        status = self._offload_to_cpu(obj, label)
+        try:
+            if hasattr(comfy, "model_management"):
+                if hasattr(comfy.model_management, "unload_model_clones"):
+                    inner = getattr(obj, "model", obj)
+                    comfy.model_management.unload_model_clones(inner)
+                    status = f"\u2705 {label}: fully unloaded\n"
+        except Exception as e:
+            status += f"\u26a0\ufe0f {label}: cache eviction failed ({e})\n"
+        return status
+
+    def unload(
+        self,
+        mode: str = "Offload to RAM",
+        model: Any = None,
+        clip: Any = None,
+        vae: Any = None,
+    ) -> Tuple[Any, Any, Any, str]:
+        report = [f"=== VRAM Unloader ({mode}) ==="]
+
+        targets = [(model, "MODEL"), (clip, "CLIP"), (vae, "VAE")]
+
+        if mode == "Offload to RAM":
+            for obj, label in targets:
+                line = self._offload_to_cpu(obj, label)
+                if line:
+                    report.append(line.strip())
+
+        elif mode == "Full Unload":
+            for obj, label in targets:
+                line = self._full_unload(obj, label)
+                if line:
+                    report.append(line.strip())
+            try:
+                if hasattr(comfy, "model_management") and hasattr(comfy.model_management, "soft_empty_cache"):
+                    comfy.model_management.soft_empty_cache()
+                    report.append("\U0001f9f9 CUDA cache cleared")
+            except Exception:
+                pass
+
+        elif mode == "Aggressive Clear":
+            for obj, label in targets:
+                line = self._full_unload(obj, label)
+                if line:
+                    report.append(line.strip())
+            try:
+                if hasattr(comfy, "model_management"):
+                    if hasattr(comfy.model_management, "unload_all_models"):
+                        comfy.model_management.unload_all_models()
+                    if hasattr(comfy.model_management, "soft_empty_cache"):
+                        comfy.model_management.soft_empty_cache()
+            except Exception:
+                pass
+            gc.collect()
+            if torch is not None and hasattr(torch, "cuda") and torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.ipc_collect()
+            report.append("\U0001f4a5 Aggressive clear complete (gc + CUDA cache purged)")
+
+        if len(report) == 1:
+            report.append("No models were connected.")
+
+        status = "\n".join(report)
+        logger.info(status)
+        _send_cmm_event("cmm.vram_unload", {"mode": mode, "status": status})
+
+        return (model, clip, vae, status)
+
+
+# =============================================================================
+# 13. VRAM Reloader
+# =============================================================================
+class CMMVRAMReloader:
+    """
+    Passthrough node that reloads MODEL, CLIP, and/or VAE back onto the GPU.
+    Respects ComfyUI's memory management and partial-loading budget.
+    """
+
+    CATEGORY = "\u2623Renegade Nodes\u2623/CivitAI/Memory"
+    FUNCTION = "reload"
+    RETURN_TYPES = ("MODEL", "CLIP", "VAE", "STRING")
+    RETURN_NAMES = ("model", "clip", "vae", "status")
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {},
+            "optional": {
+                "model": ("MODEL",),
+                "clip": ("CLIP",),
+                "vae": ("VAE",),
+            },
+        }
+
+    @classmethod
+    def IS_CHANGED(cls, **kwargs) -> str:
+        """Always re-execute — this node is a side-effect operation."""
+        return str(time.time())
+
+    def _get_device(self) -> str:
+        """Determine the target GPU device."""
+        try:
+            if hasattr(comfy, "model_management") and hasattr(comfy.model_management, "get_torch_device"):
+                return comfy.model_management.get_torch_device()
+        except Exception:
+            pass
+        if torch is not None and torch.cuda.is_available():
+            return "cuda"
+        return "cpu"
+
+    def _reload_to_gpu(self, obj: Any, label: str) -> str:
+        """Load a model back onto GPU via ComfyUI's managed loader or manual .to()."""
+        if obj is None:
+            return ""
+        try:
+            # Prefer ComfyUI's managed loading (respects VRAM budget)
+            if hasattr(comfy, "model_management") and hasattr(comfy.model_management, "load_model_gpu"):
+                comfy.model_management.load_model_gpu(obj)
+                return f"\u2705 {label}: reloaded to GPU (managed)\n"
+        except Exception:
+            pass
+
+        # Fallback: manual device transfer
+        device = self._get_device()
+        try:
+            inner = getattr(obj, "model", None)
+            if inner is not None and hasattr(inner, "to"):
+                inner.to(device)
+                return f"\u2705 {label}: reloaded to {device} (manual)\n"
+            if hasattr(obj, "to"):
+                obj.to(device)
+                return f"\u2705 {label}: reloaded to {device} (manual)\n"
+        except Exception as e:
+            return f"\u26a0\ufe0f {label}: reload failed ({e})\n"
+        return ""
+
+    def reload(
+        self,
+        model: Any = None,
+        clip: Any = None,
+        vae: Any = None,
+    ) -> Tuple[Any, Any, Any, str]:
+        report = ["=== VRAM Reloader ==="]
+
+        for obj, label in [(model, "MODEL"), (clip, "CLIP"), (vae, "VAE")]:
+            line = self._reload_to_gpu(obj, label)
+            if line:
+                report.append(line.strip())
+
+        if len(report) == 1:
+            report.append("No models were connected.")
+
+        status = "\n".join(report)
+        logger.info(status)
+        _send_cmm_event("cmm.vram_reload", {"status": status})
+
+        return (model, clip, vae, status)

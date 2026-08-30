@@ -20,6 +20,8 @@ try:
         CMMSearchAndQueue,
         CMMCheckHuggingFace,
         CMMRawRequest,
+        CMMVRAMUnloader,
+        CMMVRAMReloader,
     )
 except ImportError:
     from datatypes import MODEL_BUNDLE  # type: ignore
@@ -35,6 +37,8 @@ except ImportError:
         CMMSearchAndQueue,
         CMMCheckHuggingFace,
         CMMRawRequest,
+        CMMVRAMUnloader,
+        CMMVRAMReloader,
     )
 
 NODE_CLASS_MAPPINGS = {
@@ -49,6 +53,8 @@ NODE_CLASS_MAPPINGS = {
     "CMMSearchAndQueue": CMMSearchAndQueue,
     "CMMCheckHuggingFace": CMMCheckHuggingFace,
     "CMMRawRequest": CMMRawRequest,
+    "CMMVRAMUnloader": CMMVRAMUnloader,
+    "CMMVRAMReloader": CMMVRAMReloader,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -63,6 +69,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "CMMSearchAndQueue": "CMM: Search & Queue Download",
     "CMMCheckHuggingFace": "CMM: Check Hugging Face",
     "CMMRawRequest": "CMM: Raw API Request",
+    "CMMVRAMUnloader": "CMM: VRAM Unloader",
+    "CMMVRAMReloader": "CMM: VRAM Reloader",
 }
 
 WEB_DIRECTORY = "./web/js"
